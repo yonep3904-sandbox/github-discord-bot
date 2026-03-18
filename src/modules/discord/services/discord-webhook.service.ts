@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import { Config } from '@/config/config';
+import { getConfig } from '@/config/config';
 import { RetryableError } from '@/common/errors/retryable.error';
 import type { DiscordWebhookMessage } from '@/types/external/discord';
 import { DiscordApiError } from '../errors/discord-api-error';
@@ -39,7 +39,7 @@ export class DiscordWebhookService {
       this.logger.debug('Sending Discord webhook message');
 
       // fetch API call
-      const response = await fetch(Config.api.discordWebhookUrl, {
+      const response = await fetch(getConfig().api.discordWebhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(message),
