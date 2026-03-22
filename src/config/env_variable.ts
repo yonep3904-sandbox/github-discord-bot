@@ -1,25 +1,40 @@
-import { required, urlCheck } from '@/lib/env_variable';
+import { required, optional, urlCheck, booleanCheck } from '@/lib/env_variable';
 
-let cached: ReturnType<typeof createEnvConfig> | null = null;
+export class EnvVariable {
+  private static cached: ReturnType<typeof EnvVariable.create> | null = null;
 
-const createEnvConfig = () =>
-  ({
-    api: {
-      discordWebhookUrl: urlCheck(required('DISCORD_WEBHOOK_URL')),
-      githubWebhookSecret: required('GITHUB_WEBHOOK_SECRET'),
-    },
-    config: {},
-    env: {
-      state: process.env.NODE_ENV,
-      development: process.env.NODE_ENV === 'development',
-      test: process.env.NODE_ENV === 'test',
-      production: process.env.NODE_ENV === 'production',
-    },
-  }) as const;
-
-export const getEnvConfig = () => {
-  if (!cached) {
-    cached = createEnvConfig();
+  private static create() {
+    return {
+      api: {
+        discordWebhookUrl: urlCheck(required('DISCORD_WEBHOOK_URL')),
+        slackWebhookUrl: urlCheck(
+          optional(
+            'SLACK_WEBHOOK_URL',
+            'https://hooks.slack.com/services/your/default/webhook/url',
+          ),
+        ),
+        githubWebhookSecret: required('GITHUB_WEBHOOK_SECRET'),
+      },
+      config: {
+        mockAvailable: booleanCheck(required('MOCK_AVAILABLE')),
+      },
+      node: {
+        state: process.env.NODE_ENV,
+        development: process.env.NODE_ENV === 'development',
+        test: process.env.NODE_ENV === 'test',
+        production: process.env.NODE_ENV === 'production',
+      },
+    } as const;
   }
-  return cached;
-};
+
+  static get() {
+    if (!EnvVariable.cached) {
+      EnvVariable.cached = EnvVariable.create();
+    }
+    return EnvVariable.cached;
+  }
+
+  static reset() {
+    EnvVariable.cached = null;
+  }
+}
