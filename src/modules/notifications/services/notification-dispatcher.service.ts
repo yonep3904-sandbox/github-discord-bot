@@ -1,4 +1,10 @@
-import { Injectable, Logger, Inject, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Inject,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { NotificationQueueService } from './notification-queue.service';
 import { retry } from '@/lib/retry';
 import { getErrorStack } from '@/utils/error';
@@ -9,12 +15,14 @@ import {
   NOTIFICATION_CONFIG,
   type NotificationConfig,
 } from './notification-config-provider.service';
+import { EnvVariable } from '@/config/env_variable';
 
 @Injectable()
-export class NotificationDispatcher implements OnModuleInit {
+export class NotificationDispatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationDispatcher.name);
-  private readonly dequeueDelay = 100;
-  private isRunning = false;
+  private readonly dequeueDelay: number = 100;
+  private isRunning: boolean = false;
+  private forceStop: boolean = false;
 
   constructor(
     @Inject(NOTIFICATION_CONFIG)
@@ -30,8 +38,20 @@ export class NotificationDispatcher implements OnModuleInit {
     this.start();
   }
 
+  onModuleDestroy() {
+    this.stop();
+  }
+
   start() {
     if (this.isRunning) return;
+    if (EnvVariable.get().node.test) {
+      this.logger.warn(
+        'Running in test environment, dispatcher will not start',
+      );
+      return;
+    }
+
+    this.logger.log('Starting dispatcher...');
 
     this.isRunning = true;
 
@@ -42,13 +62,16 @@ export class NotificationDispatcher implements OnModuleInit {
     });
   }
 
-  stop() {
+  stop(force: boolean = false) {
+    this.logger.log(`Stopping dispatcher (force=${force})...`);
+
     this.isRunning = false;
+    this.forceStop = force;
   }
 
   private async loop() {
-    // 順序優先：1件ずつ処理（並列化しない）
-    while (this.isRunning) {
+    // Graceful shutdown
+    while ((this.isRunning || !this.queue.isEmpty()) && !this.forceStop) {
       const job = this.queue.dequeue();
 
       if (!job) {
