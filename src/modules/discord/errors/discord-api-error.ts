@@ -1,9 +1,8 @@
-export class DiscordApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-  ) {
-    super(message);
+import { ExternalApiError } from '@/errors';
+
+export class DiscordApiError extends ExternalApiError {
+  constructor(message: string, status: number) {
+    super(message, status, 'discord');
     this.name = 'DiscordApiError';
   }
 }

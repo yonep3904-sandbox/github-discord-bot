@@ -40,7 +40,7 @@ export type Embed = {
   fields?: EmbedField[]; // フィールド(タイトルと値のペア、25個まで)
 };
 
-export type DiscordWebhookMessage = {
+export type DiscordNotificationPayload = {
   content?: string; // メッセージの内容(2000文字まで)
   embeds?: Embed[]; // 埋め込みメッセージ(10個まで)
   username?: string; // botの表示名を上書き
