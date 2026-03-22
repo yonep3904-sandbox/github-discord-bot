@@ -1,5 +1,5 @@
 import { isError } from '@/utils/error';
-import { RetryableError } from '@/errors/retryable.error';
+import { RetryableError } from '@/errors/retryable-error';
 
 export async function retry<T>(
   fn: () => Promise<T>,
