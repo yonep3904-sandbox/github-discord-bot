@@ -11,19 +11,19 @@ import type {
 import type { RGB } from '@/types/utility/scalars';
 
 export const supportedEvents: GithubWebhookEventName[] = [
-  'issues',
-  'issue_comment',
-  'pull_request',
-  'pull_request_review',
-  'pull_request_review_comment',
-  'push',
   'commit_comment',
-  'release',
-  'repository',
-  'status',
   'create',
   'delete',
   'fork',
+  'issue_comment',
+  'issues',
+  'pull_request',
+  'pull_request_review_comment',
+  'pull_request_review',
+  'push',
+  'release',
+  'repository',
+  'status',
   'workflow_job',
 ];
 
@@ -95,32 +95,32 @@ export class GithubWebhookNotificationTransformer {
     }
 
     switch (event.type) {
-      case 'issues':
-        return this.handleIssues(event);
-      case 'issue_comment':
-        return this.handleIssueComment(event);
-      case 'pull_request':
-        return this.handlePullRequest(event);
-      case 'pull_request_review':
-        return this.handlePullRequestReview(event);
-      case 'pull_request_review_comment':
-        return this.handlePullRequestReviewComment(event);
-      case 'push':
-        return this.handlePush(event);
       case 'commit_comment':
         return this.handleCommitComment(event);
-      case 'release':
-        return this.handleRelease(event);
-      case 'repository':
-        return this.handleRepository(event);
-      case 'status':
-        return this.handleStatus(event);
       case 'create':
         return this.handleCreate(event);
       case 'delete':
         return this.handleDelete(event);
       case 'fork':
         return this.handleFork(event);
+      case 'issue_comment':
+        return this.handleIssueComment(event);
+      case 'issues':
+        return this.handleIssues(event);
+      case 'pull_request':
+        return this.handlePullRequest(event);
+      case 'pull_request_review_comment':
+        return this.handlePullRequestReviewComment(event);
+      case 'pull_request_review':
+        return this.handlePullRequestReview(event);
+      case 'push':
+        return this.handlePush(event);
+      case 'release':
+        return this.handleRelease(event);
+      case 'repository':
+        return this.handleRepository(event);
+      case 'status':
+        return this.handleStatus(event);
       case 'workflow_job':
         return this.handleWorkflowJob(event);
       default:
@@ -128,22 +128,89 @@ export class GithubWebhookNotificationTransformer {
     }
   }
 
-  private handleIssues(
-    event: Extract<SupportedEvent, { type: 'issues' }>,
+  private handleCommitComment(
+    event: Extract<SupportedEvent, { type: 'commit_comment' }>,
   ): GithubNotificationContent {
     const payload = event.payload;
-    const { action, issue, repository } = payload;
+    const { action, comment, repository } = payload;
+
+    const shortCommitId = comment.commit_id.slice(0, 7);
 
     return this.createContent({
       event,
       action,
-      title: `Issue ${action ?? 'updated'}: ${issue.title ?? 'unknown issue'}`,
-      description: issue.body,
-      url: issue.html_url,
+      title: `Commit comment ${action}: ${shortCommitId}`,
+      description: comment.body,
+      url: comment.html_url,
       fields: [
         this.createField('Action', action, true),
-        this.createField('State', issue.state, true),
-        this.createField('Issue #', issue.number, true),
+        this.createField('Commit', shortCommitId, true),
+        this.createRepositoryField(repository),
+      ],
+    });
+  }
+
+  private handleCreate(
+    event: Extract<SupportedEvent, { type: 'create' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const action = 'create';
+
+    const { ref, ref_type: refType, description, repository } = payload;
+
+    return this.createContent({
+      event,
+      action: action,
+      title: `Create ${refType}: ${ref}`,
+      description: description,
+      url: repository.html_url,
+      fields: [
+        this.createField('Action', action, true),
+        this.createField('Ref Type', refType, true),
+        this.createField('Ref', ref, true),
+        this.createRepositoryField(repository),
+      ],
+    });
+  }
+
+  private handleDelete(
+    event: Extract<SupportedEvent, { type: 'delete' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const action = 'delete';
+    const { ref, ref_type: refType, repository } = payload;
+
+    return this.createContent({
+      event,
+      action: action,
+      title: `Delete ${refType}: ${ref}`,
+      description: null,
+      url: repository.html_url,
+      fields: [
+        this.createField('Action', action, true),
+        this.createField('Ref Type', refType, true),
+        this.createField('Ref', ref, true),
+        this.createRepositoryField(repository),
+      ],
+    });
+  }
+
+  private handleFork(
+    event: Extract<SupportedEvent, { type: 'fork' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const action = 'fork';
+    const { forkee, repository } = payload;
+
+    return this.createContent({
+      event,
+      action: action,
+      title: `Repository forked: ${forkee.full_name ?? 'unknown repository'}`,
+      description: forkee.description,
+      url: forkee.html_url,
+      fields: [
+        this.createField('Fork', forkee.full_name ?? 'unknown', true),
+        this.createField('Owner', forkee.owner.login ?? 'unknown', true),
         this.createRepositoryField(repository),
       ],
     });
@@ -165,6 +232,27 @@ export class GithubWebhookNotificationTransformer {
         this.createField('Action', action, true),
         this.createField('Issue #', issue.number, true),
         this.createField('State', issue.state, true),
+        this.createRepositoryField(repository),
+      ],
+    });
+  }
+
+  private handleIssues(
+    event: Extract<SupportedEvent, { type: 'issues' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const { action, issue, repository } = payload;
+
+    return this.createContent({
+      event,
+      action,
+      title: `Issue ${action ?? 'updated'}: ${issue.title ?? 'unknown issue'}`,
+      description: issue.body,
+      url: issue.html_url,
+      fields: [
+        this.createField('Action', action, true),
+        this.createField('State', issue.state, true),
+        this.createField('Issue #', issue.number, true),
         this.createRepositoryField(repository),
       ],
     });
@@ -192,27 +280,6 @@ export class GithubWebhookNotificationTransformer {
     });
   }
 
-  private handlePullRequestReview(
-    event: Extract<SupportedEvent, { type: 'pull_request_review' }>,
-  ): GithubNotificationContent {
-    const payload = event.payload;
-    const { action, pull_request: pr, review, repository } = payload;
-
-    return this.createContent({
-      event,
-      action,
-      title: `PR review ${action ?? 'updated'}: ${pr.title ?? 'unknown pull request'}`,
-      description: review.body,
-      url: review.html_url,
-      fields: [
-        this.createField('Action', action, true),
-        this.createField('Review State', review.state, true),
-        this.createField('PR State', pr.state, true),
-        this.createRepositoryField(repository),
-      ],
-    });
-  }
-
   private handlePullRequestReviewComment(
     event: Extract<SupportedEvent, { type: 'pull_request_review_comment' }>,
   ): GithubNotificationContent {
@@ -230,6 +297,27 @@ export class GithubWebhookNotificationTransformer {
         this.createField('PR State', pr.state, true),
         this.createField('File', comment.path, true),
         this.createField('Line', comment.line, true),
+        this.createRepositoryField(repository),
+      ],
+    });
+  }
+
+  private handlePullRequestReview(
+    event: Extract<SupportedEvent, { type: 'pull_request_review' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const { action, pull_request: pr, review, repository } = payload;
+
+    return this.createContent({
+      event,
+      action,
+      title: `PR review ${action ?? 'updated'}: ${pr.title ?? 'unknown pull request'}`,
+      description: review.body,
+      url: review.html_url,
+      fields: [
+        this.createField('Action', action, true),
+        this.createField('Review State', review.state, true),
+        this.createField('PR State', pr.state, true),
         this.createRepositoryField(repository),
       ],
     });
@@ -277,28 +365,6 @@ export class GithubWebhookNotificationTransformer {
         this.createRepositoryField(
           repository as GithubOpenAPIComponents['schemas']['repository'], // GitHub のドキュメント通りなら GithubOpenAPIComponents['schemas']['repository'] 型のはず
         ),
-      ],
-    });
-  }
-
-  private handleCommitComment(
-    event: Extract<SupportedEvent, { type: 'commit_comment' }>,
-  ): GithubNotificationContent {
-    const payload = event.payload;
-    const { action, comment, repository } = payload;
-
-    const shortCommitId = comment.commit_id.slice(0, 7);
-
-    return this.createContent({
-      event,
-      action,
-      title: `Commit comment ${action}: ${shortCommitId}`,
-      description: comment.body,
-      url: comment.html_url,
-      fields: [
-        this.createField('Action', action, true),
-        this.createField('Commit', shortCommitId, true),
-        this.createRepositoryField(repository),
       ],
     });
   }
@@ -383,72 +449,6 @@ export class GithubWebhookNotificationTransformer {
         this.createRepositoryField(repository),
       ],
       status: statusForColor,
-    });
-  }
-
-  private handleCreate(
-    event: Extract<SupportedEvent, { type: 'create' }>,
-  ): GithubNotificationContent {
-    const payload = event.payload;
-    const action = 'create';
-
-    const { ref, ref_type: refType, description, repository } = payload;
-
-    return this.createContent({
-      event,
-      action: action,
-      title: `Create ${refType}: ${ref}`,
-      description: description,
-      url: repository.html_url,
-      fields: [
-        this.createField('Action', action, true),
-        this.createField('Ref Type', refType, true),
-        this.createField('Ref', ref, true),
-        this.createRepositoryField(repository),
-      ],
-    });
-  }
-
-  private handleDelete(
-    event: Extract<SupportedEvent, { type: 'delete' }>,
-  ): GithubNotificationContent {
-    const payload = event.payload;
-    const action = 'delete';
-    const { ref, ref_type: refType, repository } = payload;
-
-    return this.createContent({
-      event,
-      action: action,
-      title: `Delete ${refType}: ${ref}`,
-      description: null,
-      url: repository.html_url,
-      fields: [
-        this.createField('Action', action, true),
-        this.createField('Ref Type', refType, true),
-        this.createField('Ref', ref, true),
-        this.createRepositoryField(repository),
-      ],
-    });
-  }
-
-  private handleFork(
-    event: Extract<SupportedEvent, { type: 'fork' }>,
-  ): GithubNotificationContent {
-    const payload = event.payload;
-    const action = 'fork';
-    const { forkee, repository } = payload;
-
-    return this.createContent({
-      event,
-      action: action,
-      title: `Repository forked: ${forkee.full_name ?? 'unknown repository'}`,
-      description: forkee.description,
-      url: forkee.html_url,
-      fields: [
-        this.createField('Fork', forkee.full_name ?? 'unknown', true),
-        this.createField('Owner', forkee.owner.login ?? 'unknown', true),
-        this.createRepositoryField(repository),
-      ],
     });
   }
 
