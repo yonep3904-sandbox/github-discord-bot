@@ -6,7 +6,7 @@ import type {
 } from '@/types/internal/notification-event';
 import type { DiscordNotificationPayload } from '@/types/external/discord';
 import { NotificationBuilderImpl } from '@/types/internal/notification-platform';
-import { toDiscordColor } from '@/utils/color';
+import { RGB } from '@/types/utility/scalars';
 
 @Injectable()
 export class DiscordNotificationBuilder implements NotificationBuilderImpl<DiscordNotificationPayload> {
@@ -54,10 +54,14 @@ export class DiscordNotificationBuilder implements NotificationBuilderImpl<Disco
           footer: {
             text: `${content.type}${content.action ? ` / ${content.action}` : ''}`,
           },
-          color: toDiscordColor(content.color),
+          color: this.toDiscordColor(content.color),
           fields: content.fields,
         },
       ],
     };
+  }
+
+  private toDiscordColor(color: RGB): number {
+    return parseInt(color.replace('#', ''), 16);
   }
 }
