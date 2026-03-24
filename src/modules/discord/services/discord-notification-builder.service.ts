@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type {
   NotificationEvent,
   ManualNotificationContent,
@@ -6,11 +6,10 @@ import type {
 } from '@/types/internal/notification-event';
 import type { DiscordNotificationPayload } from '@/types/external/discord';
 import { NotificationBuilderImpl } from '@/types/internal/notification-platform';
+import { RGB } from '@/types/utility/scalars';
 
 @Injectable()
 export class DiscordNotificationBuilder implements NotificationBuilderImpl<DiscordNotificationPayload> {
-  private readonly logger = new Logger(DiscordNotificationBuilder.name);
-
   build(event: NotificationEvent): DiscordNotificationPayload {
     switch (event.source) {
       case 'manual':
@@ -40,10 +39,29 @@ export class DiscordNotificationBuilder implements NotificationBuilderImpl<Disco
   private buildGithubNotification(
     content: GithubNotificationContent,
   ): DiscordNotificationPayload {
-    const dummy = {
-      content: `New pull request in ${content.repository} by ${content.actor}`,
+    return {
+      embeds: [
+        {
+          title: content.title,
+          description: content.description,
+          url: content.url,
+          timestamp: content.timestamp,
+          author: {
+            name: content.actor?.login ?? 'unknown',
+            url: content.actor?.url ?? undefined,
+            icon_url: content.actor?.avatarUrl ?? undefined,
+          },
+          footer: {
+            text: `${content.type}${content.action ? ` / ${content.action}` : ''}`,
+          },
+          color: this.toDiscordColor(content.color),
+          fields: content.fields,
+        },
+      ],
     };
+  }
 
-    return dummy;
+  private toDiscordColor(color: RGB): number {
+    return parseInt(color.replace('#', ''), 16);
   }
 }
