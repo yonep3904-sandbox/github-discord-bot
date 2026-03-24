@@ -29,7 +29,7 @@ export function toDiscordColor(
         'Invalid hex color format. Expected "#RRGGBB" or "RRGGBB".',
       );
     }
-    return parseInt(hex, 16);
+    return parseInt(hex.replace(/^#/, ''), 16);
   } else if (
     typeof arg1 === 'number' &&
     typeof arg2 === 'number' &&
