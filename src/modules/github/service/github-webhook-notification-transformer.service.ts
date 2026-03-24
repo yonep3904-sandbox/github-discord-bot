@@ -134,17 +134,15 @@ export class GithubWebhookNotificationTransformer {
     const payload = event.payload;
     const { action, comment, repository } = payload;
 
-    const shortCommitId = comment.commit_id.slice(0, 7);
-
     return this.createContent({
       event,
       action,
-      title: `Commit comment ${action}: ${shortCommitId}`,
+      title: `Commit comment ${action}: ${comment.commit_id.slice(0, 7)}`,
       description: comment.body,
       url: comment.html_url,
       fields: [
         this.createField('Action', action, true),
-        this.createField('Commit', shortCommitId, true),
+        this.createField('Commit', comment.commit_id.slice(0, 7), true),
         this.createRepositoryField(repository),
       ],
     });
@@ -337,11 +335,12 @@ export class GithubWebhookNotificationTransformer {
     } = payload;
 
     const createCommitSummary = (c: typeof commits) => {
-      const commitLines = c.slice(0, this.maxCommitLines).map((commit) => {
-        const shortId = commit.id.slice(0, 7);
-        const message = commit.message ?? 'no message';
-        return `- ${shortId}: ${message}`;
-      });
+      const commitLines = c
+        .slice(0, this.maxCommitLines)
+        .map(
+          (commit) =>
+            `- ${commit.id.slice(0, 7)}: ${commit.message ?? 'no message'}`,
+        );
       const moreCount = c.length - commitLines.length;
       const summary = commitLines.length
         ? `${commitLines.join('\n')}${moreCount > 0 ? `\n...and ${moreCount} more` : ''}`
@@ -350,13 +349,12 @@ export class GithubWebhookNotificationTransformer {
     };
 
     const refName = ref.replace(/refs\/heads\//, '') ?? 'unknown';
-    const summary = createCommitSummary(commits);
 
     return this.createContent({
       event,
       action: action,
       title: `Push to ${refName}`,
-      description: summary,
+      description: createCommitSummary(commits),
       url: compare ?? headCommit?.url,
       fields: [
         this.createField('Action', action, true),
@@ -426,7 +424,6 @@ export class GithubWebhookNotificationTransformer {
       repository,
     } = payload;
 
-    const shortSha = sha.slice(0, 7);
     const statusForColor: StatusForColor =
       (
         {
@@ -445,7 +442,7 @@ export class GithubWebhookNotificationTransformer {
       url: targetUrl ?? repository.html_url,
       fields: [
         this.createField('Context', context, true),
-        this.createField('SHA', shortSha, true),
+        this.createField('SHA', sha.slice(0, 7), true),
         this.createRepositoryField(repository),
       ],
       status: statusForColor,
@@ -476,7 +473,6 @@ export class GithubWebhookNotificationTransformer {
         : null;
     };
 
-    const stepSummary = createJobSummary(workflowJob);
     const statusForColor: StatusForColor =
       (
         {
@@ -498,7 +494,7 @@ export class GithubWebhookNotificationTransformer {
       event,
       action: action,
       title: `Workflow job: ${workflowJob.name ?? 'unknown job'} ${status}`,
-      description: stepSummary,
+      description: createJobSummary(workflowJob),
       url: workflowJob.html_url,
       fields: [
         this.createField('Status', workflowJob.status, true),
