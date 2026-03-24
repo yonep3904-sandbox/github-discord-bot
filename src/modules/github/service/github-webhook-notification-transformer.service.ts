@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  GithubOpenAPIComponents,
   GithubWebhookEvent,
   GithubWebhookEventName,
 } from '@/types/external/github';
@@ -8,7 +9,6 @@ import type {
   FieldItem,
 } from '@/types/internal/notification-event';
 import type { RGB } from '@/types/utility/scalars';
-import { getProperty } from '@/utils/types';
 
 export const supportedEvents: GithubWebhookEventName[] = [
   'issues',
@@ -132,7 +132,7 @@ export class GithubWebhookNotificationTransformer {
     event: Extract<SupportedEvent, { type: 'issues' }>,
   ): GithubNotificationContent {
     const payload = event.payload;
-    const { action, issue } = payload;
+    const { action, issue, repository } = payload;
 
     return this.createContent({
       event,
@@ -144,6 +144,7 @@ export class GithubWebhookNotificationTransformer {
         this.createField('Action', action, true),
         this.createField('State', issue.state, true),
         this.createField('Issue #', issue.number, true),
+        this.createRepositoryField(repository),
       ],
     });
   }
@@ -152,7 +153,7 @@ export class GithubWebhookNotificationTransformer {
     event: Extract<SupportedEvent, { type: 'issue_comment' }>,
   ): GithubNotificationContent {
     const payload = event.payload;
-    const { action, issue, comment } = payload;
+    const { action, issue, comment, repository } = payload;
 
     return this.createContent({
       event,
@@ -164,6 +165,7 @@ export class GithubWebhookNotificationTransformer {
         this.createField('Action', action, true),
         this.createField('Issue #', issue.number, true),
         this.createField('State', issue.state, true),
+        this.createRepositoryField(repository),
       ],
     });
   }
@@ -172,7 +174,7 @@ export class GithubWebhookNotificationTransformer {
     event: Extract<SupportedEvent, { type: 'pull_request' }>,
   ): GithubNotificationContent {
     const payload = event.payload;
-    const { action, pull_request: pr } = payload;
+    const { action, pull_request: pr, repository } = payload;
 
     return this.createContent({
       event,
@@ -185,6 +187,7 @@ export class GithubWebhookNotificationTransformer {
         this.createField('Base', pr.base.ref, true),
         this.createField('Head', pr.head.ref, true),
         this.createField('State', pr.state, true),
+        this.createRepositoryField(repository),
       ],
     });
   }
@@ -193,7 +196,7 @@ export class GithubWebhookNotificationTransformer {
     event: Extract<SupportedEvent, { type: 'pull_request_review' }>,
   ): GithubNotificationContent {
     const payload = event.payload;
-    const { action, pull_request: pr, review } = payload;
+    const { action, pull_request: pr, review, repository } = payload;
 
     return this.createContent({
       event,
@@ -205,6 +208,7 @@ export class GithubWebhookNotificationTransformer {
         this.createField('Action', action, true),
         this.createField('Review State', review.state, true),
         this.createField('PR State', pr.state, true),
+        this.createRepositoryField(repository),
       ],
     });
   }
@@ -213,7 +217,7 @@ export class GithubWebhookNotificationTransformer {
     event: Extract<SupportedEvent, { type: 'pull_request_review_comment' }>,
   ): GithubNotificationContent {
     const payload = event.payload;
-    const { action, pull_request: pr, comment } = payload;
+    const { action, pull_request: pr, comment, repository } = payload;
 
     return this.createContent({
       event,
@@ -226,6 +230,7 @@ export class GithubWebhookNotificationTransformer {
         this.createField('PR State', pr.state, true),
         this.createField('File', comment.path, true),
         this.createField('Line', comment.line, true),
+        this.createRepositoryField(repository),
       ],
     });
   }
@@ -235,7 +240,13 @@ export class GithubWebhookNotificationTransformer {
   ): GithubNotificationContent {
     const payload = event.payload;
     const action = 'push';
-    const { commits, ref, compare, head_commit: headCommit } = payload;
+    const {
+      commits,
+      ref,
+      compare,
+      head_commit: headCommit,
+      repository,
+    } = payload;
 
     const createCommitSummary = (c: typeof commits) => {
       const commitLines = c.slice(0, this.maxCommitLines).map((commit) => {
@@ -263,6 +274,9 @@ export class GithubWebhookNotificationTransformer {
         this.createField('Action', action, true),
         this.createField('Ref', refName, true),
         this.createField('Commits', commits.length, true),
+        this.createRepositoryField(
+          repository as GithubOpenAPIComponents['schemas']['repository'], // GitHub のドキュメント通りなら GithubOpenAPIComponents['schemas']['repository'] 型のはず
+        ),
       ],
     });
   }
@@ -271,7 +285,7 @@ export class GithubWebhookNotificationTransformer {
     event: Extract<SupportedEvent, { type: 'commit_comment' }>,
   ): GithubNotificationContent {
     const payload = event.payload;
-    const { action, comment } = payload;
+    const { action, comment, repository } = payload;
 
     const shortCommitId = comment.commit_id.slice(0, 7);
 
@@ -284,6 +298,7 @@ export class GithubWebhookNotificationTransformer {
       fields: [
         this.createField('Action', action, true),
         this.createField('Commit', shortCommitId, true),
+        this.createRepositoryField(repository),
       ],
     });
   }
@@ -292,7 +307,7 @@ export class GithubWebhookNotificationTransformer {
     event: Extract<SupportedEvent, { type: 'release' }>,
   ): GithubNotificationContent {
     const payload = event.payload;
-    const { action, release } = payload;
+    const { action, release, repository } = payload;
 
     return this.createContent({
       event,
@@ -307,6 +322,7 @@ export class GithubWebhookNotificationTransformer {
         this.createField('Draft', release.draft ? 'yes' : 'no', true),
         this.createField('Prerelease', release.prerelease ? 'yes' : 'no', true),
         this.createField('Author', release.author?.login, true),
+        this.createRepositoryField(repository),
       ],
     });
   }
@@ -323,7 +339,10 @@ export class GithubWebhookNotificationTransformer {
       title: `Repository ${action ?? 'updated'}`,
       description: repository.description,
       url: repository.html_url,
-      fields: [this.createField('Action', action, true)],
+      fields: [
+        this.createField('Action', action, true),
+        this.createRepositoryField(repository),
+      ],
     });
   }
 
@@ -332,7 +351,14 @@ export class GithubWebhookNotificationTransformer {
   ): GithubNotificationContent {
     const payload = event.payload;
     const action = 'status';
-    const { state, sha, description, target_url: targetUrl, context } = payload;
+    const {
+      state,
+      sha,
+      description,
+      target_url: targetUrl,
+      context,
+      repository,
+    } = payload;
 
     const shortSha = sha.slice(0, 7);
     const statusForColor: StatusForColor =
@@ -350,10 +376,11 @@ export class GithubWebhookNotificationTransformer {
       action: action,
       title: `Commit status ${state}`,
       description: description,
-      url: targetUrl,
+      url: targetUrl ?? repository.html_url,
       fields: [
         this.createField('Context', context, true),
         this.createField('SHA', shortSha, true),
+        this.createRepositoryField(repository),
       ],
       status: statusForColor,
     });
@@ -365,18 +392,19 @@ export class GithubWebhookNotificationTransformer {
     const payload = event.payload;
     const action = 'create';
 
-    const { ref, ref_type: refType, description } = payload;
+    const { ref, ref_type: refType, description, repository } = payload;
 
     return this.createContent({
       event,
       action: action,
       title: `Create ${refType}: ${ref}`,
       description: description,
-      url: null, // Repository URL
+      url: repository.html_url,
       fields: [
         this.createField('Action', action, true),
         this.createField('Ref Type', refType, true),
         this.createField('Ref', ref, true),
+        this.createRepositoryField(repository),
       ],
     });
   }
@@ -386,18 +414,19 @@ export class GithubWebhookNotificationTransformer {
   ): GithubNotificationContent {
     const payload = event.payload;
     const action = 'delete';
-    const { ref, ref_type: refType } = payload;
+    const { ref, ref_type: refType, repository } = payload;
 
     return this.createContent({
       event,
       action: action,
       title: `Delete ${refType}: ${ref}`,
       description: null,
-      url: null, // Repository URL
+      url: repository.html_url,
       fields: [
         this.createField('Action', action, true),
         this.createField('Ref Type', refType, true),
         this.createField('Ref', ref, true),
+        this.createRepositoryField(repository),
       ],
     });
   }
@@ -407,7 +436,7 @@ export class GithubWebhookNotificationTransformer {
   ): GithubNotificationContent {
     const payload = event.payload;
     const action = 'fork';
-    const { forkee } = payload;
+    const { forkee, repository } = payload;
 
     return this.createContent({
       event,
@@ -418,6 +447,7 @@ export class GithubWebhookNotificationTransformer {
       fields: [
         this.createField('Fork', forkee.full_name ?? 'unknown', true),
         this.createField('Owner', forkee.owner.login ?? 'unknown', true),
+        this.createRepositoryField(repository),
       ],
     });
   }
@@ -432,7 +462,7 @@ export class GithubWebhookNotificationTransformer {
       return null;
     } // Only notify when the workflow job is completed (success, failure, cancelled, etc.)
 
-    const { workflow_job: workflowJob } = payload;
+    const { workflow_job: workflowJob, repository } = payload;
 
     const createJobSummary = (job: typeof workflowJob) => {
       const stepLines = job.steps
@@ -473,6 +503,7 @@ export class GithubWebhookNotificationTransformer {
       fields: [
         this.createField('Status', workflowJob.status, true),
         this.createField('Conclusion', workflowJob.conclusion, true),
+        this.createRepositoryField(repository),
       ],
       status: statusForColor,
     });
@@ -515,36 +546,6 @@ export class GithubWebhookNotificationTransformer {
     return this.supportedEventsSet.has(eventName as SupportedEventName);
   }
 
-  /**
-   * Safely extracts repository information from the payload if it exists and is valid.
-   * @param payload The webhook event payload
-   * @returns The repository information if it exists and is valid, or undefined otherwise
-   */
-  private getRepository(payload: unknown): {
-    name?: string;
-    fullName?: string;
-    htmlUrl?: string;
-  } {
-    const repository = getProperty(payload, 'repository');
-    if (repository === undefined) {
-      return {};
-    }
-
-    const name = getProperty(repository, 'name');
-    const fullName = getProperty(repository, 'full_name');
-    const htmlUrl = getProperty(repository, 'html_url');
-
-    const nameValid = typeof name === 'string';
-    const fullNameValid = typeof fullName === 'string';
-    const htmlUrlValid = typeof htmlUrl === 'string';
-
-    return {
-      name: nameValid ? name : undefined,
-      fullName: fullNameValid ? fullName : undefined,
-      htmlUrl: htmlUrlValid ? htmlUrl : undefined,
-    };
-  }
-
   private createContent<E extends GithubWebhookEvent>({
     event,
     action,
@@ -558,13 +559,11 @@ export class GithubWebhookNotificationTransformer {
     action: string;
     title: string;
     description: string | null | undefined;
-    url: string | null | undefined;
+    url?: string;
     fields: (FieldItem | null)[];
     status?: StatusForColor;
   }): GithubNotificationContent {
     const payload = event.payload;
-
-    const repository = this.getRepository(payload);
 
     const actor = payload.sender
       ? {
@@ -574,17 +573,13 @@ export class GithubWebhookNotificationTransformer {
         }
       : undefined;
 
-    const repositoryUrl = repository.htmlUrl;
-
     return {
       type: event.type,
       action,
 
       title,
       description: description ?? undefined,
-      url: url ?? repositoryUrl ?? undefined,
-
-      repository,
+      url,
       actor,
       timestamp: event.timestamp,
       color: this.resolveEventColor(event.type, status),
@@ -624,6 +619,23 @@ export class GithubWebhookNotificationTransformer {
       name,
       value: String(value),
       inline,
+    };
+  }
+
+  private createRepositoryField(
+    repository: GithubOpenAPIComponents['schemas']['repository'],
+    inline: boolean = true,
+  ): FieldItem | null {
+    if (repository === null) {
+      return null;
+    }
+
+    const name = repository.full_name ?? 'unknown repository';
+    const url = repository.html_url ?? 'unknown url';
+    return {
+      name: 'Repository',
+      value: `${name}\n${url}`,
+      inline: inline,
     };
   }
 }

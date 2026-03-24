@@ -14,11 +14,6 @@ export type GithubNotificationContent = {
   title: string;
   description?: string;
   url?: string;
-  repository?: {
-    name?: string;
-    fullName?: string;
-    url?: string;
-  };
   actor?: {
     login?: string;
     url?: string;
