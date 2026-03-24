@@ -11,20 +11,31 @@ import type {
 import type { RGB } from '@/types/utility/scalars';
 
 export const supportedEvents: GithubWebhookEventName[] = [
+  'branch_protection_rule',
+  'check_suite',
   'commit_comment',
   'create',
   'delete',
+  'deployment',
+  'deployment_status',
   'fork',
   'issue_comment',
   'issues',
+  'label',
+  'member',
+  'milestone',
+  'public',
   'pull_request',
   'pull_request_review_comment',
   'pull_request_review',
+  'pull_request_review_thread',
   'push',
   'release',
   'repository',
   'status',
+  'watch',
   'workflow_job',
+  'workflow_run',
 ];
 
 export type SupportedEventName = Extract<
@@ -59,26 +70,37 @@ export class GithubWebhookNotificationTransformer {
     push: '#1F883D', // green寄り
     release: '#BC4C00', // orange
     workflow: '#6F42C1', // actions系
+    deploy: '#1A7F37', // deployment系
   } as const satisfies Record<string, RGB>;
 
   private readonly eventColorMap: Partial<Record<SupportedEventName, RGB>> = {
+    branch_protection_rule: this.colorMap.default,
+    check_suite: this.colorMap.workflow,
     // issue
     issues: this.colorMap.issue,
     issue_comment: this.colorMap.issue,
+    label: this.colorMap.issue,
+    milestone: this.colorMap.issue,
 
     // pr
     pull_request: this.colorMap.pr,
     pull_request_review: this.colorMap.pr,
     pull_request_review_comment: this.colorMap.pr,
+    pull_request_review_thread: this.colorMap.pr,
 
     // push
     push: this.colorMap.push,
+
+    // deploy
+    deployment: this.colorMap.deploy,
+    deployment_status: this.colorMap.deploy,
 
     // release
     release: this.colorMap.release,
 
     // workflow
     workflow_job: this.colorMap.workflow,
+    workflow_run: this.colorMap.workflow,
   };
 
   private readonly supportedEventsSet: Set<SupportedEventName> = new Set(
@@ -95,24 +117,42 @@ export class GithubWebhookNotificationTransformer {
     }
 
     switch (event.type) {
+      case 'branch_protection_rule':
+        return this.handleBranchProtectionRule(event);
+      case 'check_suite':
+        return this.handleCheckSuite(event);
       case 'commit_comment':
         return this.handleCommitComment(event);
       case 'create':
         return this.handleCreate(event);
       case 'delete':
         return this.handleDelete(event);
+      case 'deployment':
+        return this.handleDeployment(event);
+      case 'deployment_status':
+        return this.handleDeploymentStatus(event);
       case 'fork':
         return this.handleFork(event);
       case 'issue_comment':
         return this.handleIssueComment(event);
       case 'issues':
         return this.handleIssues(event);
+      case 'label':
+        return this.handleLabel(event);
+      case 'member':
+        return this.handleMember(event);
+      case 'milestone':
+        return this.handleMilestone(event);
+      case 'public':
+        return this.handlePublic(event);
       case 'pull_request':
         return this.handlePullRequest(event);
       case 'pull_request_review_comment':
         return this.handlePullRequestReviewComment(event);
       case 'pull_request_review':
         return this.handlePullRequestReview(event);
+      case 'pull_request_review_thread':
+        return this.handlePullRequestReviewThread(event);
       case 'push':
         return this.handlePush(event);
       case 'release':
@@ -121,11 +161,80 @@ export class GithubWebhookNotificationTransformer {
         return this.handleRepository(event);
       case 'status':
         return this.handleStatus(event);
+      case 'watch':
+        return this.handleWatch(event);
       case 'workflow_job':
         return this.handleWorkflowJob(event);
+      case 'workflow_run':
+        return this.handleWorkflowRun(event);
       default:
         return this.handleFallback(event);
     }
+  }
+
+  private handleBranchProtectionRule(
+    event: Extract<SupportedEvent, { type: 'branch_protection_rule' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const { action, repository, rule } = payload;
+
+    return this.createContent({
+      event,
+      action,
+      title: `Branch protection rule ${action}: ${rule.name}`,
+      description: null,
+      url: repository.html_url,
+      fields: [
+        this.createField('Action', action, true),
+        this.createField('Rule', rule.name, true),
+        this.createRepositoryField(repository),
+      ],
+    });
+  }
+
+  private handleCheckSuite(
+    event: Extract<SupportedEvent, { type: 'check_suite' }>,
+  ): GithubNotificationContent | null {
+    const payload = event.payload;
+    const { action, check_suite: checkSuite, repository } = payload;
+
+    if (checkSuite.status !== 'completed') {
+      return null;
+    }
+
+    const statusForColor: StatusForColor =
+      (
+        {
+          success: 'success',
+          failure: 'failure',
+          neutral: 'pending',
+          cancelled: 'failure',
+          timed_out: 'failure',
+          action_required: 'failure',
+          stale: 'pending',
+          skipped: 'pending',
+          startup_failure: 'failure',
+        } satisfies Record<
+          Exclude<typeof checkSuite.conclusion, null>,
+          StatusForColor
+        >
+      )[checkSuite.conclusion ?? 'stale'] ?? null;
+
+    return this.createContent({
+      event,
+      action,
+      title: `Check suite ${action}: ${checkSuite.head_branch ?? 'unknown branch'}`,
+      description: null,
+      url: checkSuite.check_runs_url ?? repository.html_url,
+      fields: [
+        this.createField('Status', checkSuite.status, true),
+        this.createField('Conclusion', checkSuite.conclusion, true),
+        this.createField('Branch', checkSuite.head_branch, true),
+        this.createField('SHA', checkSuite.head_sha?.slice(0, 7), true),
+        this.createRepositoryField(repository),
+      ],
+      status: statusForColor,
+    });
   }
 
   private handleCommitComment(
@@ -193,6 +302,74 @@ export class GithubWebhookNotificationTransformer {
     });
   }
 
+  private handleDeployment(
+    event: Extract<SupportedEvent, { type: 'deployment' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const action = 'created';
+    const { deployment, repository } = payload;
+
+    return this.createContent({
+      event,
+      action,
+      title: `Deployment created: ${deployment.environment}`,
+      description: deployment.description,
+      url: repository.html_url,
+      fields: [
+        this.createField('Ref', deployment.ref, true),
+        this.createField('SHA', deployment.sha.slice(0, 7), true),
+        this.createField('Environment', deployment.environment, true),
+        this.createField('Task', deployment.task, true),
+        this.createRepositoryField(repository),
+      ],
+    });
+  }
+
+  private handleDeploymentStatus(
+    event: Extract<SupportedEvent, { type: 'deployment_status' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const action = 'created';
+    const {
+      deployment,
+      deployment_status: deploymentStatus,
+      repository,
+    } = payload;
+
+    const statusForColor: StatusForColor =
+      (
+        {
+          success: 'success',
+          pending: 'pending',
+          failure: 'failure',
+          error: 'failure',
+          inactive: 'pending',
+          in_progress: 'pending',
+          queued: 'pending',
+        } satisfies Record<typeof deploymentStatus.state, StatusForColor>
+      )[deploymentStatus.state] ?? null;
+
+    return this.createContent({
+      event,
+      action,
+      title: `Deployment status: ${deploymentStatus.state}`,
+      description: deploymentStatus.description,
+      url:
+        deploymentStatus.environment_url ??
+        deploymentStatus.log_url ??
+        deploymentStatus.target_url ??
+        repository.html_url,
+      fields: [
+        this.createField('State', deploymentStatus.state, true),
+        this.createField('Environment', deployment.environment, true),
+        this.createField('Ref', deployment.ref, true),
+        this.createField('SHA', deployment.sha.slice(0, 7), true),
+        this.createRepositoryField(repository),
+      ],
+      status: statusForColor,
+    });
+  }
+
   private handleFork(
     event: Extract<SupportedEvent, { type: 'fork' }>,
   ): GithubNotificationContent {
@@ -256,6 +433,89 @@ export class GithubWebhookNotificationTransformer {
     });
   }
 
+  private handleLabel(
+    event: Extract<SupportedEvent, { type: 'label' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const { action, label, repository } = payload;
+
+    return this.createContent({
+      event,
+      action,
+      title: `Label ${action}: ${label.name}`,
+      description: label.description,
+      url: repository.html_url,
+      fields: [
+        this.createField('Action', action, true),
+        this.createField('Label', label.name, true),
+        this.createField('Color', `#${label.color}`, true),
+        this.createRepositoryField(repository),
+      ],
+    });
+  }
+
+  private handleMember(
+    event: Extract<SupportedEvent, { type: 'member' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const { action, member, repository } = payload;
+    const memberLogin = member?.login ?? 'unknown member';
+    const memberUrl = member?.html_url ?? repository.html_url;
+
+    return this.createContent({
+      event,
+      action,
+      title: `Repository member ${action}: ${memberLogin}`,
+      description: null,
+      url: memberUrl,
+      fields: [
+        this.createField('Action', action, true),
+        this.createField('Member', memberLogin, true),
+        this.createRepositoryField(repository),
+      ],
+    });
+  }
+
+  private handleMilestone(
+    event: Extract<SupportedEvent, { type: 'milestone' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const { action, milestone, repository } = payload;
+
+    return this.createContent({
+      event,
+      action,
+      title: `Milestone ${action}: ${milestone.title}`,
+      description: milestone.description,
+      url: milestone.html_url,
+      fields: [
+        this.createField('Action', action, true),
+        this.createField('State', milestone.state, true),
+        this.createField('Open Issues', milestone.open_issues, true),
+        this.createField('Closed Issues', milestone.closed_issues, true),
+        this.createField('Due On', milestone.due_on, true),
+        this.createRepositoryField(repository),
+      ],
+    });
+  }
+
+  private handlePublic(
+    event: Extract<SupportedEvent, { type: 'public' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const action = 'publicized';
+    const { repository } = payload;
+
+    return this.createContent({
+      event,
+      action,
+      title: `Repository made public: ${repository.full_name}`,
+      description: repository.description,
+      url: repository.html_url,
+      fields: [this.createRepositoryField(repository)],
+    });
+  }
+
   private handlePullRequest(
     event: Extract<SupportedEvent, { type: 'pull_request' }>,
   ): GithubNotificationContent {
@@ -273,6 +533,28 @@ export class GithubWebhookNotificationTransformer {
         this.createField('Base', pr.base.ref, true),
         this.createField('Head', pr.head.ref, true),
         this.createField('State', pr.state, true),
+        this.createRepositoryField(repository),
+      ],
+    });
+  }
+
+  private handlePullRequestReviewThread(
+    event: Extract<SupportedEvent, { type: 'pull_request_review_thread' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const { action, pull_request: pr, thread, repository } = payload;
+    const commentCount = thread.comments.length;
+
+    return this.createContent({
+      event,
+      action,
+      title: `PR review thread ${action}: ${pr.title ?? 'unknown pull request'}`,
+      description: null,
+      url: pr.html_url,
+      fields: [
+        this.createField('Action', action, true),
+        this.createField('PR State', pr.state, true),
+        this.createField('Comments', commentCount, true),
         this.createRepositoryField(repository),
       ],
     });
@@ -449,6 +731,25 @@ export class GithubWebhookNotificationTransformer {
     });
   }
 
+  private handleWatch(
+    event: Extract<SupportedEvent, { type: 'watch' }>,
+  ): GithubNotificationContent {
+    const payload = event.payload;
+    const { action, repository } = payload;
+
+    return this.createContent({
+      event,
+      action,
+      title: `Repository starred: ${repository.full_name}`,
+      description: repository.description,
+      url: repository.html_url,
+      fields: [
+        this.createField('Action', action, true),
+        this.createRepositoryField(repository),
+      ],
+    });
+  }
+
   private handleWorkflowJob(
     event: Extract<SupportedEvent, { type: 'workflow_job' }>,
   ): GithubNotificationContent | null {
@@ -499,6 +800,54 @@ export class GithubWebhookNotificationTransformer {
       fields: [
         this.createField('Status', workflowJob.status, true),
         this.createField('Conclusion', workflowJob.conclusion, true),
+        this.createRepositoryField(repository),
+      ],
+      status: statusForColor,
+    });
+  }
+
+  private handleWorkflowRun(
+    event: Extract<SupportedEvent, { type: 'workflow_run' }>,
+  ): GithubNotificationContent | null {
+    const payload = event.payload;
+    const { action, repository, workflow_run: workflowRun, workflow } = payload;
+
+    if (workflowRun.status !== 'completed') {
+      return null;
+    }
+
+    const statusForColor: StatusForColor =
+      (
+        {
+          success: 'success',
+          failure: 'failure',
+          neutral: 'pending',
+          cancelled: 'failure',
+          skipped: 'pending',
+          timed_out: 'failure',
+          action_required: 'failure',
+          stale: 'pending',
+          startup_failure: 'failure',
+        } satisfies Record<
+          Exclude<typeof workflowRun.conclusion, null>,
+          StatusForColor
+        >
+      )[workflowRun.conclusion ?? 'stale'] ?? null;
+
+    const description =
+      'display_title' in workflowRun ? workflowRun.display_title : undefined;
+
+    return this.createContent({
+      event,
+      action,
+      title: `Workflow run ${action}: ${workflowRun.name ?? workflow?.name ?? 'unknown workflow'}`,
+      description,
+      url: workflowRun.html_url,
+      fields: [
+        this.createField('Status', workflowRun.status, true),
+        this.createField('Conclusion', workflowRun.conclusion, true),
+        this.createField('Branch', workflowRun.head_branch, true),
+        this.createField('Event', workflowRun.event, true),
         this.createRepositoryField(repository),
       ],
       status: statusForColor,
