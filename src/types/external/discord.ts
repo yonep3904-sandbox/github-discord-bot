@@ -4,7 +4,7 @@
  */
 import type { ISO8601 } from '@/types/utility/scalars';
 
-export type DiscordColor = number; // 16進数カラーコード (例: 0xff0000)
+export type DiscordColor = number; // 10進数カラーコード (例: 16711680 は赤色)
 
 export type EmbedFooter = {
   text: string; // フッターテキスト
