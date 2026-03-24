@@ -1,7 +1,31 @@
+import type { GithubWebhookEventName } from '@/types/external/github';
+import type { ISO8601, RGB } from '@/types/utility/scalars';
+
+export type FieldItem = {
+  name: string;
+  value: string;
+  inline?: boolean;
+};
+
 export type GithubNotificationContent = {
-  type: 'pull_request.opened';
-  repository: string;
-  actor: string;
+  type: GithubWebhookEventName;
+  action: string;
+
   title: string;
-  url: string;
-}; // あとで他のイベントも追加
+  description?: string;
+  url?: string;
+  repository?: {
+    name?: string;
+    fullName?: string;
+    url?: string;
+  };
+  actor?: {
+    login?: string;
+    url?: string;
+    avatarUrl?: string;
+  };
+  timestamp: ISO8601;
+
+  color: RGB;
+  fields: FieldItem[];
+};
